@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cmath>
 
+
 #define res 1
 #define SW 160*res
 #define SH 120*res
@@ -10,8 +11,33 @@
 #define pixelScale 4/res
 #define GLSW (SW*pixelScale)
 #define GLSH (SH*pixelScale)
-#define numSect 4
-#define numWall 16
+
+//texturas
+#include "textures/T_NUMBERS.h"
+#include "textures/T_VIEW2D.h"
+#include "textures/T_00.h"
+#include "textures/T_01.h"
+#include "textures/T_02.h"
+#include "textures/T_03.h"
+#include "textures/T_04.h"
+#include "textures/T_05.h"
+#include "textures/T_06.h"
+#include "textures/T_07.h"
+#include "textures/T_08.h"
+#include "textures/T_09.h"
+#include "textures/T_10.h"
+#include "textures/T_11.h"
+#include "textures/T_12.h"
+#include "textures/T_13.h"
+#include "textures/T_14.h"
+#include "textures/T_15.h"
+#include "textures/T_16.h"
+#include "textures/T_17.h"
+#include "textures/T_18.h"
+#include "textures/T_19.h"
+int numText = 19;
+int numSect = 0;
+int numWall = 0;
 
 typedef struct {
   int fr1, fr2;
@@ -38,7 +64,9 @@ typedef struct {
   int x1, y1; // linha de baixo ponto 1
   int x2, y2; // linhas de cima ponto 2
   int c; // cor da parede
-} walls; walls W[30];
+  int wt, u, v; // textura da parede e telha u/v 
+  int shade; //sombra da parede.
+} walls; walls W[256];
 
 typedef struct {
   int ws, we; // Numbero de começo e fim da parede
@@ -46,9 +74,47 @@ typedef struct {
   // int x, y; // Posição central para o setor
   int d; // Adiciona uma distancia y para ordenar a direção
   int c1, c2; // Cor de fundo e de topo
+  int st, ss; // superficie da textura, escala da superficie
   int surf[SW]; // Pontos de espera para superficies
   int surface; // é a superficie
-} sectors; sectors S[30];
+} sectors; sectors S[128];
+
+typedef struct {
+  int w, h; // tamanho e altura da textura
+  const unsigned char *name; // nome da textura
+} TextureMaps; TextureMaps Texturearea[44]; // aumenta para mais texturas
+                                            //
+void load()
+{
+ FILE *fp = fopen("level.h","r");
+ if(fp == NULL){ printf("Error opening level.h"); return;}
+ int s,w;
+
+ fscanf(fp,"%i",&numSect);   //numero de setores 
+ for(s=0;s<numSect;s++)      //carrega todos os setores
+ {
+  fscanf(fp,"%i",&S[s].ws);  
+  fscanf(fp,"%i",&S[s].we); 
+  fscanf(fp,"%i",&S[s].z1);  
+  fscanf(fp,"%i",&S[s].z2); 
+  fscanf(fp,"%i",&S[s].st); 
+  fscanf(fp,"%i",&S[s].ss);  
+ }
+ fscanf(fp,"%i",&numWall);   //numero de paredes
+ for(s=0;s<numWall;s++)      //carrega todas as paredes
+ {
+  fscanf(fp,"%i",&W[s].x1);  
+  fscanf(fp,"%i",&W[s].y1); 
+  fscanf(fp,"%i",&W[s].x2);  
+  fscanf(fp,"%i",&W[s].y2); 
+  fscanf(fp,"%i",&W[s].wt);
+  fscanf(fp,"%i",&W[s].u); 
+  fscanf(fp,"%i",&W[s].v);  
+  fscanf(fp,"%i",&W[s].shade);  
+ }
+ fscanf(fp,"%i %i %i %i %i",&P.x,&P.y,&P.z, &P.a,&P.l); //Posição do jogador, angulo, direção do olhar 
+ fclose(fp); 
+}
 
 void pixel(int x, int y, int c) {
   int rgb[3];
@@ -153,7 +219,7 @@ void clipBehindPlayer(int *x1, int *y1, int *z1, int x2, int y2, int z2) {
   *z1 = *z1 + s * (z2 - (*z1));
 }
 
-void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int c, int s) {
+void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int s, int w, int frontBack) {
   int x, y;
 
   // mantem a direfença na distancia
@@ -163,14 +229,14 @@ void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int c, int s) {
   int xs = x1; // mantem x1 inicial 
 
   // Recorta o x 
-  if (x1 < 1) 
-    x1 = 1; // corta esquerda
-  if (x2 < 1) 
-    x2 = 1; // corta esquerda
-  if (x1 > SW-1) 
-    x1 = SW-1; // corta direita
-  if (x2 > SW-1) 
-    x2 = SW-1; // corta direita
+  if (x1 < 0) 
+    x1 = 0; // corta esquerda
+  if (x2 < 0) 
+    x2 = 0; // corta esquerda
+  if (x1 > SW) 
+    x1 = SW; // corta direita
+  if (x2 > SW) 
+    x2 = SW; // corta direita
 
   // desenha x linhas verticais
   for (x = x1; x < x2; x++) {
@@ -179,39 +245,38 @@ void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int c, int s) {
     int y2 = dyt*(x - xs + 0.5)/dx+t1; // ponto y inferior
                                        
     // Recorta y
-    if (y1 < 1)
-      y1 = 1; // baixo
-    if (y2 < 1)
-      y2 = 1; // baixo
-    if (y1 > SH-1)
-      y1 = SH-1; // cima
-    if (y2 > SH-1)
-      y2 = SH-1; // cima
+    if (y1 < 0)
+      y1 = 0; // baixo
+    if (y2 < 0)
+      y2 = 0; // baixo
+    if (y1 > SH)
+      y1 = SH; // cima
+    if (y2 > SH)
+      y2 = SH; // cima
     
     // Superficie 
-    if (S[s].surface == 1) {
-      S[s].surf[x] = y1; continue; // Salva os pontos inferiores
+    //
+    // desenha frente da parede
+    if (frontBack==0) {
+      if (S[s].surface==1){S[s].surf[x]=y1;}
+      if (S[s].surface==2){S[s].surf[x]=y2;}
+      for (y = y1; y < y2; y++) {
+        pixel(x, y, 0); // parde normal
+      }
     }
-    if (S[s].surface == 2) {
-      S[s].surf[x] = y2; continue; // Salva os pontos inferiores
-    }
-    if (S[s].surface == -1) {
-      for (y=S[s].surf[x]; y<y1; y++) {
-        pixel(x, y, S[s].c1); // baixo
-      }; // Salva os pontos inferiores
-    }
-    if (S[s].surface == -2) {
-      for (y=y1; y<S[s].surf[x]; y++) {
-        pixel(x, y, S[s].c2); // cima
-      }; // Salva os pontos inferiores
+
+    // desenha a tras da parede
+    if (frontBack==1) {
+      if (S[s].surface==1){S[s].surf[x];}
+      if (S[s].surface==2){S[s].surf[x];}
+      for (y = y1; y < y2; y++) {
+        pixel(x, y, 2); // superficie
+      }
     }
 
     // pixel(x, y1, 0); // baixo
     // pixel(x, y2, 0); // cima
 
-    for (y = y1; y < y2; y++) {
-      pixel(x, y, c); // parde normal
-    }
   }
 }
 
@@ -221,7 +286,7 @@ int dist(int x1, int y1, int x2, int y2) {
 }
 
 void draw3D() {
-  int s, w, loop, wx[4], wy[4], wz[4]; float CS = M.cos[P.a], SN = M.sin[P.a];
+  int x, s, w, frontBack, cycles, loop, wx[4], wy[4], wz[4]; float CS = M.cos[P.a], SN = M.sin[P.a];
 
   // ordem dos setores por distancia
   for (s=0; s < numSect-1; s++) {
@@ -236,13 +301,13 @@ void draw3D() {
   for (s=0; s<numSect; s++) {
     S[s].d=0; // limpa distancia
     if (P.z<S[s].z1) {
-      S[s].surface=1; // superficie inferior
+      S[s].surface=1; cycles=2; for (x=0; x<SW; x++) {S[s].surf[x]=SH;}; // superficie inferior
     } else if (P.z>S[s].z2) {
-      S[s].surface=2; // superficie superior
+      S[s].surface=2; cycles=2; for (x=0; x<SW; x++) {S[s].surf[x]=0;}; // superficie superior
     } else {
-      S[s].surface = 0; // sem superficie
+      S[s].surface = 0; cycles=1;// sem superficie
     }
-    for (loop=0; loop < 2; loop++) {
+    for (frontBack=0; frontBack < cycles; frontBack++) {
 
       for (w=S[s].ws; w<S[s].we; w++) {
         // Deslocamento de dois pontos inferiores ao jogador
@@ -250,7 +315,7 @@ void draw3D() {
         int x2 = W[w].x2 - P.x, y2 = W[w].y2 - P.y;
 
         // troca para a superficie
-        if (loop == 0) {
+        if (frontBack == 1) {
           int swp = x1; x1 = x2; x2 = swp; swp = y1; y1 = y2; y2 = swp;
         }
 
@@ -268,8 +333,9 @@ void draw3D() {
                                                               // Altura z no mundo
         wz[0] = S[s].z1 - P.z + ((P.l*wy[0])/32.0);
         wz[1] = S[s].z1 - P.z + ((P.l*wy[1])/32.0);
-        wz[2] = wz[0] + S[s].z2;
-        wz[3] = wz[1] + S[s].z2;
+        wz[0] = S[s].z1 - P.z + ((P.l*wy[0])/32.0);
+        wz[1] = S[s].z1 - P.z + ((P.l*wy[1])/32.0);
+
 
         // não desenha atrás do jogador
         if (wy[0]<1 && wy[1]<1)
@@ -296,10 +362,9 @@ void draw3D() {
         //   pixel(wx[0], wy[0], 0);
         // if (wx[1] > 0 && wx[1] < SW && wy[1] > 0 && wy[1] < SH)
         //   pixel(wx[1], wy[1], 0);
-        drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], W[w].c, s);
+        drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], s, w, frontBack);
       }
       S[s].d /= (S[s].we - S[s].ws); // Encontra a distancia média do setor
-      S[s].surface*=-1; // vira para navegar até a superfície do desenho
     }
   }
 
@@ -337,6 +402,8 @@ void KeysDown(unsigned char key, int x, int y) {
     K.sr = 1;
   if (key=='.')
     K.sl = 1;
+  if (key==13)
+    load(); // teclado enter carrega nível
 }
 
 void KeysUp(unsigned char key, int x, int y) {
@@ -356,37 +423,6 @@ void KeysUp(unsigned char key, int x, int y) {
     K.sl = 0;
 }
 
-int loadSectors[] = {
-  // Inicio, fim, z1 altura, z2 altura, da parede
-  0, 4, 0, 40, 2, 3, // setor 1
-  4, 8, 0, 40, 4, 5, // setor 2
-  8, 12, 0, 40, 6, 7, // setor 3
-  12, 16, 0, 40, 0, 1 // setor 4
-};
-
-int loadWalls[] = {
-  // x1, y1, x2, y2, cor
-  0, 0, 32, 0, 0,
-  32, 0, 32, 32, 1,
-  32, 32, 0, 32, 0,
-  0, 32, 0, 0, 1,
-
-  64, 0, 96, 0, 2,
-  96, 0, 96, 32, 3,
-  96, 32, 64, 32, 2,
-  64, 32, 64, 0, 3,
-
-  64, 64, 96, 64, 4,
-  96, 64, 96, 96, 5,
-  96, 96, 64, 96, 4,
-  64, 96, 64, 64, 5,
-
-  0, 64, 32, 64, 6,
-  32, 64, 32, 96, 7,
-  32, 96, 0, 96, 6,
-  0, 96, 0, 64, 7,
-};
-
 void init() {
   int x;
 
@@ -398,28 +434,6 @@ void init() {
 
   // Inicializa o Jogador
   P.x = 70; P.y = -110; P.z = 20; P.a = 0; P.l = 0; // Variáveis iniciais do jogador
-                                                    
-  // Carrega setores
-  int s, w, v1=0, v2=0;
-
-  for (s = 0; s < numSect; s++) {
-    S[s].ws = loadSectors[v1+0]; // numero que inicia a parede
-    S[s].we = loadSectors[v1+1]; // numero que termina a parede
-    S[s].z1 = loadSectors[v1+2]; // altura inferior da parede
-    S[s].z2 = loadSectors[v1+3] - loadSectors[v1+2]; // altura superior da parede
-    S[s].c1 = loadSectors[v1+4]; // Cor do topo do setor
-    S[s].c2 = loadSectors[v1+5]; // Cor do fundo do setor
-    v1 += 6;
-
-    for (w=S[s].ws; w < S[s].we; w++) {
-      W[w].x1=loadWalls[v2+0]; // x1 baixo
-      W[w].y1=loadWalls[v2+1]; // y1 baixo
-      W[w].x2=loadWalls[v2+2]; // x2 cima
-      W[w].y2=loadWalls[v2+3]; // y2 cima
-      W[w].c=loadWalls[v2+4]; // cor da parede
-      v2+=5;
-    }
-  }
 }
 
 int main(int argc, char* argv[]) {
