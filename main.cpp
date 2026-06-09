@@ -82,7 +82,7 @@ typedef struct {
 typedef struct {
   int w, h; // tamanho e altura da textura
   const unsigned char *name; // nome da textura
-} TextureMaps; TextureMaps Texturearea[44]; // aumenta para mais texturas
+} TextureMaps; TextureMaps Textures[64]; // aumenta para mais texturas
                                             //
 void load()
 {
@@ -116,37 +116,9 @@ void load()
  fclose(fp); 
 }
 
-void pixel(int x, int y, int c) {
-  int rgb[3];
+void drawPixel(int x, int y, int r, int g, int b) { // Desenha um pixel em x/y com rgb
   
-  if (c==0) {
-    rgb[0]=255; rgb[1]=255; rgb[2]=0; // Amarelo
-  }
-  if (c==1) {
-    rgb[0]=160; rgb[1]=160; rgb[2]=0; // Amarelo escuro
-  }
-  if (c==2) {
-    rgb[0]=0; rgb[1]=255; rgb[2]=0; // Verde
-  }
-  if (c==3) {
-    rgb[0]=0; rgb[1]=160; rgb[2]=0; // Verde escuro
-  }
-  if (c==4) {
-    rgb[0]=0; rgb[1]=255; rgb[2]=255; // Ciano
-  }
-  if (c==5) {
-    rgb[0]=0; rgb[1]=160; rgb[2]=160; // Ciano escuro
-  }
-  if (c==6) {
-    rgb[0]=160; rgb[1]=100; rgb[2]=0; // Marrom
-  }
-  if (c==7) {
-    rgb[0]=110; rgb[1]=50; rgb[2]=0; // Marrom escuro
-  }
-  if (c==8) {
-    rgb[0]=0; rgb[1]=60; rgb[2]=130; // Fundo
-  }
-  glColor3ub (rgb[0], rgb[1], rgb[2]);
+  glColor3ub (r, g, b);
   glBegin(GL_POINTS);
   glVertex2i (x*pixelScale+2, y*pixelScale+2);
   glEnd();
@@ -177,10 +149,10 @@ void movePlayer() {
 
   // metralhar para a esquerda e para a direita
   if (K.sr==1) {
-    P.x += dx; P.y  -= dy;
+    P.x += dy; P.y  -= dx;
   }
   if (K.sl==1) {
-    P.x -= dx; P.y  += dy;
+    P.x -= dy; P.y  += dx;
   }
 
 
@@ -203,8 +175,9 @@ void clearBackground() {
   int x, y;
 
   for (y=0; y < SH; y++) {
+    int x, y;
     for (x=0; x < SW; x++) {
-      pixel (x, y, 8);
+      drawPixel (x, y, 0, 60, 130); // limpa a cor da tela
     }
   }
 }
@@ -258,19 +231,19 @@ void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int s, int w, int 
     //
     // desenha frente da parede
     if (frontBack==0) {
-      if (S[s].surface==1){S[s].surf[x]=y1;}
-      if (S[s].surface==2){S[s].surf[x]=y2;}
+      if (S[s].surface==1){S[s].surf[x]=y1;} // supeficie inferior salva a linha superior
+      if (S[s].surface==2){S[s].surf[x]=y2;} // supercie superior salva a linha superior
       for (y = y1; y < y2; y++) {
-        pixel(x, y, 0); // parde normal
+        drawPixel(x, y, 0, 255, 0); // parde normal
       }
     }
 
     // desenha a tras da parede
     if (frontBack==1) {
-      if (S[s].surface==1){S[s].surf[x];}
-      if (S[s].surface==2){S[s].surf[x];}
+      if (S[s].surface==1){y2=S[s].surf[x];}
+      if (S[s].surface==2){y1=S[s].surf[x];}
       for (y = y1; y < y2; y++) {
-        pixel(x, y, 2); // superficie
+        drawPixel(x, y, 255, 0, 0); // superficie
       }
     }
 
@@ -331,10 +304,11 @@ void draw3D() {
         wy[3] = wy[1];
         S[s].d += dist(0,0,(wx[0]+wx[1])/2, (wy[0]+wy[1])/2); // armazena a distancia desta parede
                                                               // Altura z no mundo
+        // altura z do mundo
         wz[0] = S[s].z1 - P.z + ((P.l*wy[0])/32.0);
         wz[1] = S[s].z1 - P.z + ((P.l*wy[1])/32.0);
-        wz[0] = S[s].z1 - P.z + ((P.l*wy[0])/32.0);
-        wz[1] = S[s].z1 - P.z + ((P.l*wy[1])/32.0);
+        wz[2] = S[s].z2 - P.z + ((P.l*wy[0])/32.0);
+        wz[3] = S[s].z2 - P.z + ((P.l*wy[1])/32.0);
 
 
         // não desenha atrás do jogador
@@ -434,6 +408,29 @@ void init() {
 
   // Inicializa o Jogador
   P.x = 70; P.y = -110; P.z = 20; P.a = 0; P.l = 0; // Variáveis iniciais do jogador
+  
+  // Define as texturas
+  Textures[ 0].name=T_00; Textures[ 0].h=T_00_HEIGHT; Textures[ 0].w=T_00_WIDTH; 
+  Textures[ 1].name=T_01; Textures[ 1].h=T_01_HEIGHT; Textures[ 1].w=T_01_WIDTH;
+  Textures[ 2].name=T_02; Textures[ 2].h=T_02_HEIGHT; Textures[ 2].w=T_02_WIDTH;
+  Textures[ 3].name=T_03; Textures[ 3].h=T_03_HEIGHT; Textures[ 3].w=T_03_WIDTH;
+  Textures[ 4].name=T_04; Textures[ 4].h=T_04_HEIGHT; Textures[ 4].w=T_04_WIDTH;
+  Textures[ 5].name=T_05; Textures[ 5].h=T_05_HEIGHT; Textures[ 5].w=T_05_WIDTH;
+  Textures[ 6].name=T_06; Textures[ 6].h=T_06_HEIGHT; Textures[ 6].w=T_06_WIDTH;
+  Textures[ 7].name=T_07; Textures[ 7].h=T_07_HEIGHT; Textures[ 7].w=T_07_WIDTH;
+  Textures[ 8].name=T_08; Textures[ 8].h=T_08_HEIGHT; Textures[ 8].w=T_08_WIDTH;
+  Textures[ 9].name=T_09; Textures[ 9].h=T_09_HEIGHT; Textures[ 9].w=T_09_WIDTH;
+  Textures[10].name=T_10; Textures[10].h=T_10_HEIGHT; Textures[10].w=T_10_WIDTH;
+  Textures[11].name=T_11; Textures[11].h=T_11_HEIGHT; Textures[11].w=T_11_WIDTH;
+  Textures[12].name=T_12; Textures[12].h=T_12_HEIGHT; Textures[12].w=T_12_WIDTH;
+  Textures[13].name=T_13; Textures[13].h=T_13_HEIGHT; Textures[13].w=T_13_WIDTH;
+  Textures[14].name=T_14; Textures[14].h=T_14_HEIGHT; Textures[14].w=T_14_WIDTH;
+  Textures[15].name=T_15; Textures[15].h=T_15_HEIGHT; Textures[15].w=T_15_WIDTH;
+  Textures[16].name=T_16; Textures[16].h=T_16_HEIGHT; Textures[16].w=T_16_WIDTH;
+  Textures[17].name=T_17; Textures[17].h=T_17_HEIGHT; Textures[17].w=T_17_WIDTH;
+  Textures[18].name=T_18; Textures[18].h=T_18_HEIGHT; Textures[18].w=T_18_WIDTH;
+  Textures[19].name=T_19; Textures[19].h=T_19_HEIGHT; Textures[19].w=T_19_WIDTH;
+
 }
 
 int main(int argc, char* argv[]) {
