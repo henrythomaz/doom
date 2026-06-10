@@ -118,9 +118,12 @@ void load()
 
 void drawPixel(int x, int y, int r, int g, int b) { // Desenha um pixel em x/y com rgb
   
+  if (x < 0 || x >= SW || y < 0 || y >= SH) {
+    return;
+  }
   glColor3ub (r, g, b);
   glBegin(GL_POINTS);
-  glVertex2i (x*pixelScale+2, y*pixelScale+2);
+  glVertex2i (x*pixelScale, y*pixelScale);
   glEnd();
 }
 
@@ -172,12 +175,10 @@ void movePlayer() {
 }
 
 void clearBackground() {
-  int x, y;
-
-  for (y=0; y < SH; y++) {
-    int x, y;
-    for (x=0; x < SW; x++) {
-      drawPixel (x, y, 0, 60, 130); // limpa a cor da tela
+  // Céu (parte superior) e chão (parte inferior)
+  for (int y = 0; y < SH; y++) {
+    for (int x = 0; x < SW; x++) {
+        drawPixel(x, y, 0, 60, 130);
     }
   }
 }
