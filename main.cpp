@@ -123,7 +123,7 @@ void drawPixel(int x, int y, int r, int g, int b) { // Desenha um pixel em x/y c
   }
   glColor3ub (r, g, b);
   glBegin(GL_POINTS);
-  glVertex2i (x*pixelScale, y*pixelScale);
+  glVertex2i (x*pixelScale+2, y*pixelScale+2);
   glEnd();
 }
 
@@ -188,13 +188,35 @@ void clipBehindPlayer(int *x1, int *y1, int *z1, int x2, int y2, int z2) {
   float db = y2; // distancia do plano -> ponto b
   float d = da - db; if (d==0) {d=1;}
   float s = da / (da - db); // fator de interceção (entre 0 e 1)
-  *x1 = *x1 + s * (x2 - (*x1)); 
-  *y1 = *y1 + s * (y2 - (*y1)); if (*y1 == 0) {*y1=1;} // evita divisão por zero
-  *z1 = *z1 + s * (z2 - (*z1));
+  *x1 = *x1 + s* (x2 - (*x1)); 
+  *y1 = *y1 + s* (y2 - (*y1)); if (*y1 == 0) {*y1=1;} // evita divisão por zero
+  *z1 = *z1 + s* (z2 - (*z1));
 }
 
 void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int s, int w, int frontBack) {
   int x, y;
+
+  // Textura da parede
+  int wt = W[w].wt;
+
+  // Textura horizontal da parede iniciando e valor do passo
+  if(x1 > x2)
+  {
+    int t=x1;
+    x1=x2;
+    x2=t;
+
+    t=b1;
+    b1=b2;
+    b2=t;
+
+    t=t1;
+    t1=t2;
+    t2=t;
+  }
+
+  float ht = 0, ht_step = (float)Textures[wt].w/(float)(x2-x1);
+
 
   // mantem a direfença na distancia
   int dyb = b2 - b1; // distancia y do linha de baixo
@@ -217,6 +239,9 @@ void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int s, int w, int 
     // O Y inicia e termina
     int y1 = dyb*(x - xs + 0.5)/dx+b1; // ponto y inferior
     int y2 = dyt*(x - xs + 0.5)/dx+t1; // ponto y inferior
+
+    // Textura da parede vertical iniciando e valor do passo
+    float vt = 0, vt_step=(float)Textures[wt].h / (float)(y2 - y1);
                                        
     // Recorta y
     if (y1 < 0)
@@ -229,20 +254,34 @@ void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int s, int w, int 
       y2 = SH; // cima
     
     // Superficie 
-    //
+
     // desenha frente da parede
     if (frontBack==0) {
       if (S[s].surface==1){S[s].surf[x]=y1;} // supeficie inferior salva a linha superior
       if (S[s].surface==2){S[s].surf[x]=y2;} // supercie superior salva a linha superior
       for (y = y1; y < y2; y++) {
-        drawPixel(x, y, 0, 255, 0); // parde normal
+        int pixel = ((int)(Textures[wt].h - vt - 1) * Textures[wt].w + (int)ht)*3;
+        int r = Textures[wt].name[pixel+0];
+        int g = Textures[wt].name[pixel+1];
+        int b = Textures[wt].name[pixel+2];
+        drawPixel(x,y,r,g,b);
+        vt+=vt_step;
       }
+      ht+=ht_step;
     }
 
     // desenha a tras da parede
     if (frontBack==1) {
       if (S[s].surface==1){y2=S[s].surf[x];}
       if (S[s].surface==2){y1=S[s].surf[x];}
+
+    if(y1 > y2)
+    {
+        int t = y1;
+        y1 = y2;
+        y2 = t;
+    }
+
       for (y = y1; y < y2; y++) {
         drawPixel(x, y, 255, 0, 0); // superficie
       }
@@ -259,28 +298,43 @@ int dist(int x1, int y1, int x2, int y2) {
   return distance;
 }
 
+
 void draw3D() {
   int x, s, w, frontBack, cycles, loop, wx[4], wy[4], wz[4]; float CS = M.cos[P.a], SN = M.sin[P.a];
 
   // ordem dos setores por distancia
-  for (s=0; s < numSect-1; s++) {
-    for (w=0; w < numSect-s-1; w++) {
-      if (S[w].d < S[w+1].d) {
-        sectors st = S[w]; S[w]=S[w+1]; S[w+1]=st;
-      }
-    }
-  }
+  // for (s=0; s < numSect-1; s++) {
+  //   for (w=0; w < numSect-s-1; w++) {
+  //     if (S[w].d < S[w+1].d) {
+  //       sectors st = S[w]; S[w]=S[w+1]; S[w+1]=st;
+  //     }
+  //   }
+  // }
+
+//   for (s=0; s<numSect-1; s++)
+// {
+//     for (w=0; w<numSect-s-1; w++)
+//     {
+//         if (S[w].d < S[w+1].d)
+//         {
+//             sectors st=S[w];
+//             S[w]=S[w+1];
+//             S[w+1]=st;
+//         }
+//     }
+// }
 
   // Desenha setores 
   for (s=0; s<numSect; s++) {
     S[s].d=0; // limpa distancia
     if (P.z<S[s].z1) {
-      S[s].surface=1; cycles=2; for (x=0; x<SW; x++) {S[s].surf[x]=SH;}; // superficie inferior
+      S[s].surface=1; cycles=2; for (x=0; x<SW; x++) {S[s].surf[x]=SH;}; // superficie inferior 
     } else if (P.z>S[s].z2) {
       S[s].surface=2; cycles=2; for (x=0; x<SW; x++) {S[s].surf[x]=0;}; // superficie superior
     } else {
       S[s].surface = 0; cycles=1;// sem superficie
     }
+    
     for (frontBack=0; frontBack < cycles; frontBack++) {
 
       for (w=S[s].ws; w<S[s].we; w++) {
@@ -288,9 +342,13 @@ void draw3D() {
         int x1 = W[w].x1 - P.x, y1 = W[w].y1 - P.y;
         int x2 = W[w].x2 - P.x, y2 = W[w].y2 - P.y;
 
-        // troca para a superficie
         if (frontBack == 1) {
-          int swp = x1; x1 = x2; x2 = swp; swp = y1; y1 = y2; y2 = swp;
+          int swp = x1;
+          x1 = x2;
+          x2 = swp;
+          swp = y1;
+          y1 = y2;
+          y2 = swp;
         }
 
         // Posição x no Mundo
@@ -337,12 +395,29 @@ void draw3D() {
         //   pixel(wx[0], wy[0], 0);
         // if (wx[1] > 0 && wx[1] < SW && wy[1] > 0 && wy[1] < SH)
         //   pixel(wx[1], wy[1], 0);
+        printf("setor=%d parede=%d dist=%d\n", s, w, dist(0,0,(wx[0]+wx[1])/2,(wy[0]+wy[1])/2));
         drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], s, w, frontBack);
       }
       S[s].d /= (S[s].we - S[s].ws); // Encontra a distancia média do setor
     }
   }
 
+}
+
+void testTextures() {
+  int x, y, t;
+
+  t = 4;
+
+  for(y=0; y < Textures[t].h; y++) {
+    for (x=0; x < Textures[t].w; x++) {
+      int pixel = (Textures[t].h - y - 1)*3 * Textures[t].w + x*3;
+      int r = Textures[t].name[pixel+0];
+      int g = Textures[t].name[pixel+1];
+      int b = Textures[t].name[pixel+2];
+      drawPixel(x,y,r,g,b);
+    }
+  }
 }
 
 void display() {
