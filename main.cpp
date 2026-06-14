@@ -183,14 +183,19 @@ void clearBackground() {
   }
 }
 
-void clipBehindPlayer(int *x1, int *y1, int *z1, int x2, int y2, int z2) {
-  float da = *y1; // distancia do plano -> ponto a
-  float db = y2; // distancia do plano -> ponto b
-  float d = da - db; if (d==0) {d=1;}
-  float s = da / (da - db); // fator de interceção (entre 0 e 1)
-  *x1 = *x1 + s* (x2 - (*x1)); 
-  *y1 = *y1 + s* (y2 - (*y1)); if (*y1 == 0) {*y1=1;} // evita divisão por zero
-  *z1 = *z1 + s* (z2 - (*z1));
+void clipBehindPlayer(float *x1, float *y1, float *z1,
+                      float x2, float y2, float z2)
+{
+    float da = *y1;
+    float db = y2;
+
+    if (fabs(db - da) < 0.001f) return;
+
+    float t = (1.0f - da) / (db - da);
+
+    *x1 = *x1 + t * (x2 - *x1);
+    *y1 = 1.0f;
+    *z1 = *z1 + t * (z2 - *z1);
 }
 
 void drawWall(int x1, int x2, int b1, int b2, int t1, int t2, int s, int w, int frontBack) {
@@ -300,108 +305,162 @@ int dist(int x1, int y1, int x2, int y2) {
 
 
 void draw3D() {
-  int x, s, w, frontBack, cycles, loop, wx[4], wy[4], wz[4]; float CS = M.cos[P.a], SN = M.sin[P.a];
-
-  // ordem dos setores por distancia
-  // for (s=0; s < numSect-1; s++) {
-  //   for (w=0; w < numSect-s-1; w++) {
-  //     if (S[w].d < S[w+1].d) {
-  //       sectors st = S[w]; S[w]=S[w+1]; S[w+1]=st;
-  //     }
-  //   }
-  // }
-
-//   for (s=0; s<numSect-1; s++)
-// {
-//     for (w=0; w<numSect-s-1; w++)
-//     {
-//         if (S[w].d < S[w+1].d)
-//         {
-//             sectors st=S[w];
-//             S[w]=S[w+1];
-//             S[w+1]=st;
-//         }
-//     }
-// }
-
-  // Desenha setores 
-  for (s=0; s<numSect; s++) {
-    S[s].d=0; // limpa distancia
-    if (P.z<S[s].z1) {
-      S[s].surface=1; cycles=2; for (x=0; x<SW; x++) {S[s].surf[x]=SH;}; // superficie inferior 
-    } else if (P.z>S[s].z2) {
-      S[s].surface=2; cycles=2; for (x=0; x<SW; x++) {S[s].surf[x]=0;}; // superficie superior
-    } else {
-      S[s].surface = 0; cycles=1;// sem superficie
-    }
+    int s, w, frontBack, cycles, x;
+    float CS = M.cos[P.a], SN = M.sin[P.a];
     
-    for (frontBack=0; frontBack < cycles; frontBack++) {
+    // ============================================
+// PASSO 1: Calcular distância de cada setor (usando a parede mais próxima)
+// ============================================
+for (s = 0; s < numSect; s++) {
+    // Inicializa a distância mínima com um valor alto
+    int sumDist = 0;
+    int nWalls = 0;
 
-      for (w=S[s].ws; w<S[s].we; w++) {
-        // Deslocamento de dois pontos inferiores ao jogador
+    // Configura superfície (chão/teto) igual antes, mas sem interferir na distância
+    if (P.z < S[s].z1) {
+        S[s].surface = 1;
+        cycles = 2;
+        for (x = 0; x < SW; x++) { S[s].surf[x] = SH; }
+    } else if (P.z > S[s].z2) {
+        S[s].surface = 2;
+        cycles = 2;
+        for (x = 0; x < SW; x++) { S[s].surf[x] = 0; }
+    } else {
+        S[s].surface = 0;
+        cycles = 1;
+    }
+
+    // Calcula distância apenas das paredes verticais (sem inverter ordem)
+    for (w = S[s].ws; w < S[s].we; w++) {
         int x1 = W[w].x1 - P.x, y1 = W[w].y1 - P.y;
         int x2 = W[w].x2 - P.x, y2 = W[w].y2 - P.y;
 
-        if (frontBack == 1) {
-          int swp = x1;
-          x1 = x2;
-          x2 = swp;
-          swp = y1;
-          y1 = y2;
-          y2 = swp;
-        }
+        // Rotaciona para o espaço da câmera
+        int wx1 = x1 * CS - y1 * SN;
+        int wy1 = y1 * CS + x1 * SN;
+        int wx2 = x2 * CS - y2 * SN;
+        int wy2 = y2 * CS + x2 * SN;
 
-        // Posição x no Mundo
-        wx[0] = x1*CS - y1*SN;
-        wx[1] = x2*CS - y2*SN;
-        wx[2] = wx[0];
-        wx[3] = wx[1];
-        // Posição y no Mundo (profundade n altura)
-        wy[0] = y1*CS + x1*SN;
-        wy[1] = y2*CS + x2*SN;
-        wy[2] = wy[0];
-        wy[3] = wy[1];
-        S[s].d += dist(0,0,(wx[0]+wx[1])/2, (wy[0]+wy[1])/2); // armazena a distancia desta parede
-                                                              // Altura z no mundo
-        // altura z do mundo
-        wz[0] = S[s].z1 - P.z + ((P.l*wy[0])/32.0);
-        wz[1] = S[s].z1 - P.z + ((P.l*wy[1])/32.0);
-        wz[2] = S[s].z2 - P.z + ((P.l*wy[0])/32.0);
-        wz[3] = S[s].z2 - P.z + ((P.l*wy[1])/32.0);
+        // Se ambos os pontos estão atrás do plano próximo, ignora
+        if (wy1 < 1 && wy2 < 1) continue;
 
+        // Aplica clipping para o cálculo da distância
+        float cwx1 = wx1, cwy1 = wy1, cwx2 = wx2, cwy2 = wy2;
+        float dummy;
+        if (cwy1 < 1) clipBehindPlayer(&cwx1, &cwy1, &dummy, cwx2, cwy2, 0);
+        if (cwy2 < 1) clipBehindPlayer(&cwx2, &cwy2, &dummy, cwx1, cwy1, 0);
 
-        // não desenha atrás do jogador
-        if (wy[0]<1 && wy[1]<1)
-          continue;
-        // se ponto 1 atrás do jogador, corta
-        if (wy[0]<1) {
-          clipBehindPlayer(&wx[0], &wy[0], &wz[0], wx[1], wy[1], wz[1]); // linha de baixo
-          clipBehindPlayer(&wx[2], &wy[2], &wz[2], wx[3], wy[3], wz[3]); // linha de cima
-        }
+        // Distância do ponto médio da parede até o jogador
+        int midX = (cwx1 + cwx2) / 2;
+        int midY = (cwy1 + cwy2) / 2;
+        int dist = (int)sqrt(midX*midX + midY*midY);
 
-        // se ponto 2 atrás do jogador, corta
-        if (wy[1]<1) {
-          clipBehindPlayer(&wx[1], &wy[1], &wz[1], wx[0], wy[0], wz[0]); // linha de baixo
-          clipBehindPlayer(&wx[3], &wy[3], &wz[3], wx[2], wy[2], wz[2]); // linha de cima
-        }
-
-        // x e y da tela (centro)
-        wx[0] = wx[0]*200/wy[0]+SW2; wy[0] = wz[0]*200/wy[0]+SH2;
-        wx[1] = wx[1]*200/wy[1]+SW2; wy[1] = wz[1]*200/wy[1]+SH2;
-        wx[2] = wx[2]*200/wy[2]+SW2; wy[2] = wz[2]*200/wy[2]+SH2;
-        wx[3] = wx[3]*200/wy[3]+SW2; wy[3] = wz[3]*200/wy[3]+SH2;
-        // desenha os pontos
-        // if (wx[0] > 0 && wx[0] < SW && wy[0] > 0 && wy[0] < SH)
-        //   pixel(wx[0], wy[0], 0);
-        // if (wx[1] > 0 && wx[1] < SW && wy[1] > 0 && wy[1] < SH)
-        //   pixel(wx[1], wy[1], 0);
-        printf("setor=%d parede=%d dist=%d\n", s, w, dist(0,0,(wx[0]+wx[1])/2,(wy[0]+wy[1])/2));
-        drawWall(wx[0], wx[1], wy[0], wy[1], wy[2], wy[3], s, w, frontBack);
-      }
-      S[s].d /= (S[s].we - S[s].ws); // Encontra a distancia média do setor
+        sumDist += dist;
+        nWalls++;
     }
-  }
 
+    if (nWalls > 0) {
+        S[s].d = sumDist / nWalls;      // usa a parede mais próxima como referência
+    } else {
+        S[s].d = 999999;       // setor invisível
+    }
+}
+    
+    // ============================================
+    // PASSO 2: Ordenar setores por distancia (mais longe primeiro)
+    // ============================================
+    for (s = 0; s < numSect - 1; s++) {
+        for (w = 0; w < numSect - s - 1; w++) {
+            if (S[w].d < S[w+1].d) {
+                sectors st = S[w];
+                S[w] = S[w+1];
+                S[w+1] = st;
+            }
+        }
+    }
+    
+    // ============================================
+    // PASSO 3: Desenhar setores na ordem (longe → perto)
+    // ============================================
+    for (s = 0; s < numSect; s++) {
+        // Pula setores muito distantes/invisiveis
+        if (S[s].d > 8000) continue;
+        
+        // Determina ciclos baseado na superficie
+        if (P.z < S[s].z1) {
+            cycles = 2;
+        } else if (P.z > S[s].z2) {
+            cycles = 2;
+        } else {
+            cycles = 1;
+        }
+        
+        // Desenha frente e tras (se aplicavel)
+        for (int pass = 0; pass < cycles; pass++) {
+            frontBack = (pass == 0) ? 0 : 1;
+            
+            for (w = S[s].ws; w < S[s].we; w++) {
+                // Pontos da parede relativos ao jogador
+                int x1 = W[w].x1 - P.x, y1 = W[w].y1 - P.y;
+                int x2 = W[w].x2 - P.x, y2 = W[w].y2 - P.y;
+                
+                // Inverte ordem para desenhar o verso (superficie)
+                if (frontBack == 1) {
+                    int swp = x1; x1 = x2; x2 = swp;
+                    swp = y1; y1 = y2; y2 = swp;
+                }
+                
+                // Rotaciona para espaco da camera
+float wx[4], wy[4], wz[4];
+wx[0] = x1*CS - y1*SN;
+wx[1] = x2*CS - y2*SN;
+wx[2] = wx[0];   // copia x do chão para o teto
+wx[3] = wx[1];
+
+wy[0] = y1*CS + x1*SN;
+wy[1] = y2*CS + x2*SN;
+wy[2] = wy[0];   // copia profundidade do chão para o teto
+wy[3] = wy[1];                
+
+                // Altura Z (piso e teto)
+                wz[0] = S[s].z1 - P.z + ((P.l * wy[0]) / 32.0);
+                wz[1] = S[s].z1 - P.z + ((P.l * wy[1]) / 32.0);
+                wz[2] = S[s].z2 - P.z + ((P.l * wy[0]) / 32.0);
+                wz[3] = S[s].z2 - P.z + ((P.l * wy[1]) / 32.0);
+                
+                // Se os dois pontos estao atras, nao desenha
+                if (wy[0] < 1 && wy[1] < 1)
+                    continue;
+                
+                // Clipping para o ponto 1 (se atras do jogador)
+                if (wy[0] < 1) {
+                    clipBehindPlayer(&wx[0], &wy[0], &wz[0], wx[1], wy[1], wz[1]);
+                    clipBehindPlayer(&wx[2], &wy[2], &wz[2], wx[3], wy[3], wz[3]);
+                }
+                
+                // Clipping para o ponto 2 (se atras do jogador)
+                if (wy[1] < 1) {
+                    clipBehindPlayer(&wx[1], &wy[1], &wz[1], wx[0], wy[0], wz[0]);
+                    clipBehindPlayer(&wx[3], &wy[3], &wz[3], wx[2], wy[2], wz[2]);
+                }
+                
+                // Projeta para coordenadas de tela
+                int scrX1 = (int)(wx[0] * 200.0f / wy[0] + SW2);
+int scrY1 = (int)(wz[0] * 200.0f / wy[0] + SH2);
+
+int scrX2 = (int)(wx[1] * 200.0f / wy[1] + SW2);
+int scrY2 = (int)(wz[1] * 200.0f / wy[1] + SH2);
+
+int scrX3 = (int)(wx[2] * 200.0f / wy[2] + SW2);
+int scrY3 = (int)(wz[2] * 200.0f / wy[2] + SH2);
+
+int scrX4 = (int)(wx[3] * 200.0f / wy[3] + SW2);
+int scrY4 = (int)(wz[3] * 200.0f / wy[3] + SH2);                
+                // Desenha a parede
+                drawWall(scrX1, scrX2, scrY1, scrY2, scrY3, scrY4, s, w, frontBack);
+            }
+        }
+    }
 }
 
 void testTextures() {
